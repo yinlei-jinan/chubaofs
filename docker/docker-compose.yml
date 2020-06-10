@@ -35,6 +35,7 @@ services:
             - objectnode2
             - objectnode3
             - nginx
+            - proxy1
         networks:
             extnetwork:
 
@@ -397,6 +398,27 @@ services:
         networks:
             extnetwork:
                 ipv4_address: 192.168.0.104
+
+    proxy1:
+        image: chubaofs/cfs-base:1.1
+        ports:
+            - "20100"
+            - "20200"
+            - "20300"
+            - "20400"
+        volumes:
+            - ./bin:/cfs/bin:ro
+            - ${DiskPath:-./docker_data}/proxy1/log:/cfs/log
+            - ./conf/proxy.json:/cfs/conf/proxy.json
+            - ./script/start_proxy.sh:/cfs/script/start.sh
+        command: /bin/sh /cfs/script/start.sh
+        restart: on-failure
+        privileged: true
+        environment:
+          - TZ=Asia/Shanghai
+        networks:
+            extnetwork:
+                ipv4_address: 192.168.0.51
 
     build:
         image: chubaofs/cfs-base:1.1

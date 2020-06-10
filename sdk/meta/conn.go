@@ -68,6 +68,7 @@ func (mw *MetaWrapper) sendToMetaPartition(mp *MetaPartition, req *proto.Packet)
 		start time.Time
 	)
 
+	req.PartitionID = mp.PartitionID
 	addr = mp.LeaderAddr
 	if addr == "" {
 		err = errors.New(fmt.Sprintf("sendToMetaPartition failed: leader addr empty, req(%v) mp(%v)", req, mp))

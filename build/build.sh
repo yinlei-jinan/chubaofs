@@ -145,6 +145,14 @@ build_cli() {
     popd >/dev/null
 }
 
+build_proxy() {
+    pre_build
+    pushd $SrcPath >/dev/null
+    echo -n "build cfs-proxy    "
+    go build $MODFLAGS -ldflags "${LDFlags}" -o ${BuildBinPath}/cfs-proxy ${SrcPath}/proxy/cfs-proxy.go && echo "success" || echo "failed"
+    popd >/dev/null
+}
+
 clean() {
     rm -rf ${BuildBinPath}
 }
@@ -178,6 +186,9 @@ case "$cmd" in
         ;;
     "cli")
         build_cli
+        ;;
+    "proxy")
+        build_proxy
         ;;
     "clean")
         clean

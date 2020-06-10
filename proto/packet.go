@@ -196,6 +196,7 @@ type Packet struct {
 	StartT             int64
 	mesg               string
 	HasPrepare         bool
+	ProxyOpType        uint8 // for proxynode to determin packet type
 }
 
 // NewPacket returns a new packet.
@@ -711,4 +712,63 @@ func (p *Packet) LogMessage(action, remote string, start int64, err error) (m st
 // ShallRetry returns if we should retry the packet.
 func (p *Packet) ShouldRetry() bool {
 	return p.ResultCode == OpAgain || p.ResultCode == OpErr
+}
+
+func (p *Packet) ReadHeaderFromConn(c net.Conn, timeoutSec int) (err error) {
+	if timeoutSec != NoReadDeadlineTime {
+		c.SetDeadline(time.Now().Add(time.Second * time.Duration(timeoutSec)))
+	} else {
+		c.SetReadDeadline(time.Time{})
+	}
+
+	header, err := Buffers.Get(util.PacketHeaderSize)
+	if err != nil {
+		header = make([]byte, util.PacketHeaderSize)
+	}
+	defer Buffers.Put(header)
+
+	n, err := io.ReadFull(c, header)
+	if err != nil {
+		return
+	}
+	if n != util.PacketHeaderSize {
+		return syscall.EBADMSG
+	}
+
+	err = p.UnmarshalHeader(header)
+	if err != nil {
+		return
+	}
+
+	if p.Size < 0 {
+		return syscall.EBADMSG
+	}
+
+	if p.ArgLen > 0 {
+		p.Arg = make([]byte, int(p.ArgLen))
+		_, err = io.ReadFull(c, p.Arg[:int(p.ArgLen)])
+	}
+
+	return
+}
+
+func (p *Packet) WriteHeaderToConn(c net.Conn, timeoutSec int) (err error) {
+	c.SetDeadline(time.Now().Add(time.Second * time.Duration(timeoutSec)))
+	header, err := Buffers.Get(util.PacketHeaderSize)
+	if err != nil {
+		header = make([]byte, util.PacketHeaderSize)
+	}
+	defer Buffers.Put(header)
+
+	p.MarshalHeader(header)
+	_, err = c.Write(header)
+	if err != nil {
+		return
+	}
+
+	if p.ArgLen > 0 {
+		_, err = c.Write(p.Arg[:int(p.ArgLen)])
+	}
+
+	return
 }
