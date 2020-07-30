@@ -18,10 +18,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/chubaofs/chubaofs/proto"
+	"github.com/chubaofs/chubaofs/sdk/codec"
 	"github.com/chubaofs/chubaofs/util/log"
 )
 
@@ -32,8 +32,7 @@ const (
 )
 
 type MigrationManager struct {
-	sync.RWMutex
-	codecNodes []proto.NodeView
+	cw *codec.CodecWrapper
 }
 
 func (mp *metaPartition) startMigrationTask() (err error) {
@@ -76,22 +75,18 @@ func (mp *metaPartition) migration() {
 		return
 	}
 
-	migrationManager := mp.manager.metaNode.migrationManager
+	mm := mp.manager.metaNode.migrationManager
 
-	migrationManager.RLock()
-	codecNodes := migrationManager.codecNodes
-	migrationManager.RUnlock()
+	mm.cw.RLock()
+	codecNodes := mm.cw.CodecNodes
+	mm.cw.RUnlock()
 
 	if len(codecNodes) == 0 {
 		err = errors.New("No valid codecnode")
 		return
 	}
 
-	err = mp.issueMigrationTask(inodes, codecNodes[0].Addr)
-	if err != nil {
-		return
-	}
-
+	err = mm.cw.BatchInodeMigration(inodes, mp.config.PartitionId, mp.config.VolName, codecNodes[0].Addr)
 	return
 }
 
@@ -168,46 +163,10 @@ func (mp *metaPartition) issueMigrationTask(inodes []uint64, codecNodeAddr strin
 	return
 }
 
-func (m *MetaNode) updateCodec() (err error) {
-	var view *proto.ClusterView
-	if view, err = masterClient.AdminAPI().GetCluster(); err != nil {
-		return
-	}
-
-	m.migrationManager.Lock()
-	m.migrationManager.codecNodes = view.CodecNodes
-	m.migrationManager.Unlock()
-
-	log.LogDebugf("updateCodec %v", view.CodecNodes)
-
-	return
-}
-
-func (m *MetaNode) updateCodecWorker() (err error) {
-	t := time.NewTicker(UpdateCodecInterval)
-
-	err = m.updateCodec()
-	if err != nil {
-		log.LogErrorf("updateCodec failed: %v", err)
-	}
-
-	for {
-		select {
-		case <-t.C:
-			err = m.updateCodec()
-			if err != nil {
-				log.LogErrorf("updateCodec failed: %v", err)
-			}
-		}
-	}
-
-	return
-}
-
 func (m *MetaNode) startMigrationManager() (err error) {
 	m.migrationManager = MigrationManager{}
 
-	go m.updateCodecWorker()
+	m.migrationManager.cw, err = codec.NewCodecWrapper(masterClient)
 
 	return
 }
