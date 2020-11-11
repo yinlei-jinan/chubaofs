@@ -54,6 +54,10 @@ type Wrapper struct {
 	stopOnce              sync.Once
 	stopC                 chan struct{}
 
+	alignSize                int
+	maxExtentNumPerAlignArea int
+	forceAlignMerge          bool
+
 	dpSelector DataPartitionSelector
 
 	HostsStatus map[string]bool
@@ -62,6 +66,8 @@ type Wrapper struct {
 // NewDataPartitionWrapper returns a new data partition wrapper.
 func NewDataPartitionWrapper(volName string, masters []string) (w *Wrapper, err error) {
 	w = new(Wrapper)
+	w.alignSize = 4096 * 16
+	w.maxExtentNumPerAlignArea = 2
 	w.stopC = make(chan struct{})
 	w.masters = masters
 	w.mc = masterSDK.NewMasterClient(masters, false)
@@ -303,4 +309,16 @@ func distanceFromLocal(b string) int {
 	remote := strings.Split(b, ":")[0]
 
 	return iputil.GetDistance(net.ParseIP(LocalIP), net.ParseIP(remote))
+}
+
+func (w *Wrapper) AlignSize() int {
+	return w.alignSize
+}
+
+func (w *Wrapper) MaxExtentNumPerAlignArea() int {
+	return w.maxExtentNumPerAlignArea
+}
+
+func (w *Wrapper) ForceAlignMerge() bool {
+	return w.forceAlignMerge
 }
